@@ -1,20 +1,96 @@
 module LocalitySensitive
-    import Parameters
-    import Base.insert!
+    import Base.push!
+    import DataStructures
+    import Iterators
 
-    Parameters.@with_kw struct LSH
-        shingle_size::Int = 3
-        n_hashes::Int = 200
-        threshold::Float64 = 0.5
+    struct MinHash
+        threshold :: Float64
+        documents :: Vector{AbstractString}
+        shingle_size :: Int64
+        n_bands :: Int64
+        n_rows :: Int64
+        hash_functions :: Vector{Function}
+        tables :: Vector{DataStructures.DefaultDict{UInt, Vector{Int}}}
     end
+
+    function MinHash(;threshold=0.5, shingle_size=3, max_n_hashes=200)
+        n_bands, n_rows = _get_partition(threshold, max_n_hashes)
+        n_hashes = n_bands * n_rows
+        salts = [rand(UInt) for _ in 1:n_hashes]
+        hash_functions = [str -> hash(str, salt) for salt in salts]
+        tables = [DataStructures.DefaultDict{UInt, Vector{Int}}(Vector{Int}) for _ in 1:n_hashes]
+        MinHash(threshold, Vector{String}(), shingle_size, n_bands, n_rows, hash_functions, tables)
+    end
+
+    function _get_partition(threshold, max_n_hashes)
+        min_error = Inf
+        opt = (0, 0)
+        for b in 1 : max_n_hashes
+            max_r = Int(floor(max_n_hashes / b))
+            for r in 1 : max_r
+            fp = _integrate( s -> 1 - (1 - s^r)^b, threshold, 0.0)
+            fn = _integrate( s -> 1 - (1 - s^r)^b, threshold, 1.0)
+            error = fp + fn
+            if error < min_error
+                min_error = error
+                opt = (b, r)
+            end
+            end
+        end
+        return opt
+    end
+
+    function _integrate(f, a, b)
+        p = 0.001
+        area = 0.0
+        x = a
+        while x < b
+          area = area + f(x+0.5*p)*p
+          x = x + p
+        end
+        return area
+      end
     
-    function insert!(lsh:: LSH, s::AbstractString)
-
+    function push!(mh:: MinHash, s::AbstractString)::Vector{UInt}
+        push!(mh.documents, s)
+        signature = calculate_signature(mh, s)
+        index = length(mh.documents)
+        for (signature_part, table) in zip(signature, mh.tables)
+            # TODO: Optimizable, since this is already hashed?
+            push!(table[signature_part], index)
+        end
+        signature
     end
 
-    function find_similar(lsh:: LSH, s::AbstractString)
-        return s
+    function calculate_signature(mh:: MinHash, s::AbstractString)::Vector{UInt64}
+        shingles = _shingles(mh, s)
+        [minimum((hash_func(s) for s in shingles)) for hash_func in mh.hash_functions]
     end
 
-    export LSH, insert!, find_similar
+    function _shingles(mh, s)
+        s_shingle = mh.shingle_size
+        n = length(s)
+        unique([s[thisind(s, i): thisind(s, j)] for (i,j) in 
+            zip(1 : n - s_shingle + 1, s_shingle : n)])
+    end
+
+    function find_similar(mh:: MinHash, s::AbstractString)
+        signature = calculate_signature(mh, s)
+        indices = vcat([table[signature_part] for (table, signature_part) in zip(mh.tables, signature)]...)
+        mh.documents[unique(indices)]
+    end
+
+    function similar_pairs(mh)
+        sims = Set()
+        for table in mh.tables
+            for similars in values(table)
+                for i in 1:length(similars), j in i + 1 : length(similars)
+                    push!(sims, (similars[i],similars[j]))
+                end
+            end
+        end
+        collect(sims)
+    end
+
+    export MinHash, push!, find_similar, similar_pairs
 end # module
