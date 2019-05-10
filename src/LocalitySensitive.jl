@@ -1,7 +1,6 @@
 module LocalitySensitive
     import Base.push!
     import DataStructures
-    import Iterators
 
     struct MinHash
         threshold :: Float64
@@ -13,6 +12,14 @@ module LocalitySensitive
         tables :: Vector{DataStructures.DefaultDict{UInt, Vector{Int}}}
     end
 
+    """
+    Construct minhash index. 
+    
+    # Arguments
+    - `threshold` the jaccard similarity above which documents are probably returned to be similar.
+    - `shingle_size` the size of the shingles the strings will be cut into
+    - `max_n_hashes` the maximum number of hash functions used
+    """
     function MinHash(;threshold=0.5, shingle_size=3, max_n_hashes=200)
         n_bands, n_rows = _get_partition(threshold, max_n_hashes)
         n_hashes = n_bands * n_rows
@@ -51,9 +58,12 @@ module LocalitySensitive
         return area
       end
     
+    """
+    Push new string and save it's signature. Return calculated signature.
+    """
     function push!(mh:: MinHash, s::AbstractString)::Vector{UInt}
         push!(mh.documents, s)
-        signature = calculate_signature(mh, s)
+        signature = _calculate_signature(mh, s)
         index = length(mh.documents)
         for (signature_part, table) in zip(signature, mh.tables)
             # TODO: Optimizable, since this is already hashed?
@@ -62,7 +72,7 @@ module LocalitySensitive
         signature
     end
 
-    function calculate_signature(mh:: MinHash, s::AbstractString)::Vector{UInt64}
+    function _calculate_signature(mh:: MinHash, s::AbstractString)::Vector{UInt}
         shingles = _shingles(mh, s)
         [minimum((hash_func(s) for s in shingles)) for hash_func in mh.hash_functions]
     end
@@ -74,14 +84,20 @@ module LocalitySensitive
             zip(1 : n - s_shingle + 1, s_shingle : n)])
     end
 
-    function find_similar(mh:: MinHash, s::AbstractString)
-        signature = calculate_signature(mh, s)
+    """
+    Find probably similar strings in index.
+    """
+    function find_similar(mh:: MinHash, s::AbstractString)::Vector{AbstractString}
+        signature = _calculate_signature(mh, s)
         indices = vcat([table[signature_part] for (table, signature_part) in zip(mh.tables, signature)]...)
         mh.documents[unique(indices)]
     end
 
-    function similar_pairs(mh)
-        sims = Set()
+    """
+    Find all pairs of similar strings in index.
+    """
+    function similar_pairs(mh:: MinHash)::Vector{Tuple{Int, Int}}
+        sims = Set{Tuple{Int, Int}}()
         for table in mh.tables
             for similars in values(table)
                 for i in 1:length(similars), j in i + 1 : length(similars)
