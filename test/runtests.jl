@@ -1,4 +1,3 @@
-using Revise
 using LocalitySensitive
 using Test
 using Random
