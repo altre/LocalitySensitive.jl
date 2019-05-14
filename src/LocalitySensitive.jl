@@ -1,32 +1,37 @@
 module LocalitySensitive
     import Base.push!
     import DataStructures
+    import StatsBase
+    import SimpleTraits
 
     struct MinHash
-        threshold :: Float64
-        documents :: Vector{AbstractString}
-        shingle_size :: Int64
-        n_bands :: Int64
-        n_rows :: Int64
         hash_functions :: Vector{Function}
-        tables :: Vector{DataStructures.DefaultDict{UInt, Vector{Int}}}
+        """
+        Construct minhash hash functions. 
+        # Arguments
+        - `threshold` the jaccard similarity above which documents are probably returned to be similar.
+        """
+        function MinHash(max_n_hashes=200)
+            salts = [rand(UInt) for _ in 1:max_n_hashes]
+            hash_functions = [str -> hash(str, salt) for salt in salts]
+            new(hash_functions)
+        end
     end
 
-    """
-    Construct minhash index. 
-    
-    # Arguments
-    - `threshold` the jaccard similarity above which documents are probably returned to be similar.
-    - `shingle_size` the size of the shingles the strings will be cut into
-    - `max_n_hashes` the maximum number of hash functions used
-    """
-    function MinHash(;threshold=0.5, shingle_size=3, max_n_hashes=200)
-        n_bands, n_rows = _get_partition(threshold, max_n_hashes)
-        n_hashes = n_bands * n_rows
-        salts = [rand(UInt) for _ in 1:n_hashes]
-        hash_functions = [str -> hash(str, salt) for salt in salts]
-        tables = [DataStructures.DefaultDict{UInt, Vector{Int}}(Vector{Int}) for _ in 1:n_hashes]
-        MinHash(threshold, Vector{String}(), shingle_size, n_bands, n_rows, hash_functions, tables)
+    mutable struct MinHashIndex
+        threshold :: Float64
+        tables :: Vector{DataStructures.DefaultDict{UInt, Vector{Int}}}
+        bands :: Int
+        rows :: Int
+        current_index :: Int
+        max_n_hashes :: Int
+        function MinHashIndex(;minhash = MinHash(), threshold=0.5) 
+            max_n_hashes  = length(minhash.hash_functions)
+            bands, rows = _get_partition(threshold, max_n_hashes)
+            n_tables = bands * rows < max_n_hashes ? bands + 1 : bands
+            tables = [DataStructures.DefaultDict{UInt, Vector{Int}}(Vector{Int}) for _ in 1:n_tables]
+            new(threshold, tables, bands, rows, 1, max_n_hashes)
+        end
     end
 
     function _get_partition(threshold, max_n_hashes)
@@ -35,13 +40,13 @@ module LocalitySensitive
         for b in 1 : max_n_hashes
             max_r = Int(floor(max_n_hashes / b))
             for r in 1 : max_r
-            fp = _integrate( s -> 1 - (1 - s^r)^b, threshold, 0.0)
-            fn = _integrate( s -> 1 - (1 - s^r)^b, threshold, 1.0)
-            error = fp + fn
-            if error < min_error
-                min_error = error
-                opt = (b, r)
-            end
+                fp = _integrate(s -> 1 - (1 - s^r)^b, 0.0, threshold)
+                fn = _integrate(s -> (1 - s^r)^b, threshold, 1.0)
+                error = fp + fn
+                if error < min_error
+                    min_error = error
+                    opt = (b, r)
+                end
             end
         end
         return opt
@@ -52,51 +57,77 @@ module LocalitySensitive
         area = 0.0
         x = a
         while x < b
-          area = area + f(x+0.5*p)*p
-          x = x + p
+            area = area + f(x+0.5*p)*p
+            x = x + p
         end
         return area
-      end
+    end
     
     """
-    Push new string and save it's signature. Return calculated signature.
+    Push new signature to index.
     """
-    function push!(mh:: MinHash, s::AbstractString)::Vector{UInt}
-        push!(mh.documents, s)
-        signature = _calculate_signature(mh, s)
-        index = length(mh.documents)
-        for (signature_part, table) in zip(signature, mh.tables)
-            # TODO: Optimizable, since this is already hashed?
+    function push!(mhind:: MinHashIndex, signature::Vector{UInt})
+        index = mhind.current_index
+        hashes = _bands(mhind, signature)
+        for (signature_part, table) in zip(hashes, mhind.tables)
             push!(table[signature_part], index)
         end
-        signature
+        mhind.current_index += 1;
     end
 
-    function _calculate_signature(mh:: MinHash, s::AbstractString)::Vector{UInt}
-        shingles = _shingles(mh, s)
+    function _bands(mhind, signature)
+        (hash(signature[(i - 1) * mhind.rows + 1 : min(i * mhind.rows, mhind.max_n_hashes)]) for i in 1:length(mhind.tables))
+    end
+
+    #TODO: Type optimize
+    SimpleTraits.@traitfn function fingerprint(mh:: MinHash, shingles::::SimpleTraits.BaseTraits.IsIterator) 
         [minimum((hash_func(s) for s in shingles)) for hash_func in mh.hash_functions]
     end
 
-    function _shingles(mh, s)
-        s_shingle = mh.shingle_size
-        n = length(s)
-        unique([s[thisind(s, i): thisind(s, j)] for (i,j) in 
-            zip(1 : n - s_shingle + 1, s_shingle : n)])
+    """
+        Compute MinHash fingerprint for string using the `shingle` function.
+    """
+    function fingerprint(mh:: MinHash, str::AbstractString; shingle=shinglerize(3))::Vector{UInt}
+        fingerprint(mh, shingle(str))
     end
 
     """
-    Find probably similar strings in index.
+        Return a function which cuts a given string into shingles of size `size`.
+        ```jldoctest
+        julia> shingle = shinglerize(2)
+        julia> collect(shingle("abcd"))
+        ["ab","bc","cd"]
+        ```
     """
-    function find_similar(mh:: MinHash, s::AbstractString)::Vector{AbstractString}
-        signature = _calculate_signature(mh, s)
-        indices = vcat([table[signature_part] for (table, signature_part) in zip(mh.tables, signature)]...)
-        mh.documents[unique(indices)]
+    function shinglerize(size = 3)
+        function shingle(s::AbstractString)
+            n = length(s)
+            (s[thisind(s, i): thisind(s, j)] for (i,j) in 
+                zip(1 : n - size + 1, size : n))
+        end
+    end
+
+    function estimate_jaccard(a::Vector{UInt}, b::Vector{UInt})
+        StatsBase.mean(a .== b)
+    end
+
+    """
+    Find probably similar indices in index.
+    """
+    function find_similar(mhind:: MinHashIndex, signature::Vector{UInt})::Vector{Int}
+        indices = Vector{Vector{Int}}()
+        hashes = _bands(mhind, signature)
+        for (signature_part, table) in zip(hashes, mhind.tables)
+            #TODO: remove double hash
+            push!(indices, table[signature_part])
+        end
+        unique(vcat(indices...))
     end
 
     """
     Find all pairs of similar strings in index.
     """
-    function similar_pairs(mh:: MinHash)::Vector{Tuple{Int, Int}}
+    function similar_pairs(mh:: MinHashIndex)::Vector{Tuple{Int, Int}}
         sims = Set{Tuple{Int, Int}}()
         for table in mh.tables
             for similars in values(table)
@@ -108,5 +139,5 @@ module LocalitySensitive
         collect(sims)
     end
 
-    export MinHash, push!, find_similar, similar_pairs
+    export MinHash, push!, find_similar, similar_pairs, fingerprint, shinglerize, estimate_jaccard, MinHashIndex
 end # module
