@@ -50,7 +50,7 @@ end
 
 mutable struct MinHashIndex
     threshold :: Float64
-    tables :: Vector{DataStructures.DefaultDict{UInt, Vector{Int}}}
+    tables :: Vector{DataStructures.DefaultDict{Vector{UInt}, Vector{Int}}}
     bands :: Int
     rows :: Int
     current_index :: Int
@@ -59,7 +59,7 @@ mutable struct MinHashIndex
         max_n_hashes  = length(minhash.salts)
         bands, rows = _get_partition(threshold, max_n_hashes)
         n_tables = bands * rows < max_n_hashes ? bands + 1 : bands
-        tables = [DataStructures.DefaultDict{UInt, Vector{Int}}(Vector{Int}) for _ in 1:n_tables]
+        tables = [DataStructures.DefaultDict{Vector{UInt}, Vector{Int}}(Vector{Int}) for _ in 1:n_tables]
         new(threshold, tables, bands, rows, 1, max_n_hashes)
     end
 end
@@ -94,30 +94,29 @@ function _integrate(f, a, b)
 end
 
 """
-Push new signature to index.
+Push new fingerprint to index.
 """
-function push!(mhind:: MinHashIndex, signature::Vector{UInt})
+function push!(mhind:: MinHashIndex, fingerprint::Vector{UInt})
     index = mhind.current_index
-    hashes = _bands(mhind, signature)
-    for (signature_part, table) in zip(hashes, mhind.tables)
-        push!(table[signature_part], index)
+    hashes = _bands(mhind, fingerprint)
+    for (fingerprint_part, table) in zip(hashes, mhind.tables)
+        push!(table[fingerprint_part], index)
     end
     mhind.current_index += 1;
 end
 
-function _bands(mhind, signature)
-    (hash(signature[(i - 1) * mhind.rows + 1 : min(i * mhind.rows, mhind.max_n_hashes)]) for i in 1:length(mhind.tables))
+function _bands(mhind, fingerprint)
+    (fingerprint[(i - 1) * mhind.rows + 1 : min(i * mhind.rows, mhind.max_n_hashes)] for i in 1:length(mhind.tables))
 end
 
 """
 Find probably similar indices in index.
 """
-function find_similar(mhind:: MinHashIndex, signature::Vector{UInt})::Vector{Int}
+function find_similar(mhind:: MinHashIndex, fingerprint::Vector{UInt})::Vector{Int}
     indices = Vector{Vector{Int}}()
-    hashes = _bands(mhind, signature)
-    for (signature_part, table) in zip(hashes, mhind.tables)
-        #TODO: remove double hash
-        push!(indices, table[signature_part])
+    bands = _bands(mhind, fingerprint)
+    for (band, table) in zip(bands, mhind.tables)
+        push!(indices, table[band])
     end
     unique(vcat(indices...))
 end
