@@ -14,6 +14,40 @@ struct MinHash
     end
 end
 
+SimpleTraits.@traitfn function fingerprint(mh:: MinHash, shingles::::SimpleTraits.BaseTraits.IsIterator) 
+    [minimum((hash(s, salt) for s in shingles)) for salt in mh.salts]
+end
+
+"""
+    Compute MinHash fingerprint for string using the `shingle` function.
+"""
+function fingerprint(mh:: MinHash, str::AbstractString; shingle_size=3)::Vector{UInt}
+    fingerprint(mh, shingle(str; size=shingle_size))
+end
+
+"""
+    Cut a given string into shingles of size `size`.
+    ```jldoctest
+    julia> shingle = shinglerize(2)
+    julia> collect(shingle("abcd"))
+    ["ab","bc","cd"]
+    ```
+"""
+function shingle(s::AbstractString; size = 3)::Vector{AbstractString}
+    if length(s) <= size
+        return [s]
+    end
+    shingles = Vector{String}()
+    for i in 1:(length(s) - size + 1)
+        push!(shingles, s[thisind(s, i): thisind(s, i + size - 1)])
+    end
+    unique(shingles)
+end
+
+function estimate_jaccard(a::Vector{UInt}, b::Vector{UInt})
+    sum(a .== b) / length(a)
+end
+
 mutable struct MinHashIndex
     threshold :: Float64
     tables :: Vector{DataStructures.DefaultDict{UInt, Vector{Int}}}
@@ -73,40 +107,6 @@ end
 
 function _bands(mhind, signature)
     (hash(signature[(i - 1) * mhind.rows + 1 : min(i * mhind.rows, mhind.max_n_hashes)]) for i in 1:length(mhind.tables))
-end
-
-SimpleTraits.@traitfn function fingerprint(mh:: MinHash, shingles::::SimpleTraits.BaseTraits.IsIterator) 
-    [minimum((hash(s, salt) for s in shingles)) for salt in mh.salts]
-end
-
-"""
-    Compute MinHash fingerprint for string using the `shingle` function.
-"""
-function fingerprint(mh:: MinHash, str::AbstractString; shingle_size=3)::Vector{UInt}
-    fingerprint(mh, shingle(str; size=shingle_size))
-end
-
-"""
-    Cut a given string into shingles of size `size`.
-    ```jldoctest
-    julia> shingle = shinglerize(2)
-    julia> collect(shingle("abcd"))
-    ["ab","bc","cd"]
-    ```
-"""
-function shingle(s::AbstractString; size = 3)::Vector{AbstractString}
-    if length(s) <= size
-        return [s]
-    end
-    shingles = Vector{String}()
-    for i in 1:(length(s) - size + 1)
-        push!(shingles, s[thisind(s, i): thisind(s, i + size - 1)])
-    end
-    unique(shingles)
-end
-
-function estimate_jaccard(a::Vector{UInt}, b::Vector{UInt})
-    sum(a .== b) / length(a)
 end
 
 """
