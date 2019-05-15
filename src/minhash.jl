@@ -1,14 +1,16 @@
+    
+        import DataStructures
+        import SimpleTraits
+        import Base.push!
     struct MinHash
-        hash_functions :: Vector{Function}
+        salts :: Vector{UInt}
         """
         Construct minhash hash functions. 
         # Arguments
         - `threshold` the jaccard similarity above which documents are probably returned to be similar.
         """
         function MinHash(max_n_hashes=200)
-            salts = [rand(UInt) for _ in 1:max_n_hashes]
-            hash_functions = [str -> hash(str, salt) for salt in salts]
-            new(hash_functions)
+            new([rand(UInt) for _ in 1:max_n_hashes])
         end
     end
 
@@ -20,7 +22,7 @@
         current_index :: Int
         max_n_hashes :: Int
         function MinHashIndex(;minhash = MinHash(), threshold=0.5) 
-            max_n_hashes  = length(minhash.hash_functions)
+            max_n_hashes  = length(minhash.salts)
             bands, rows = _get_partition(threshold, max_n_hashes)
             n_tables = bands * rows < max_n_hashes ? bands + 1 : bands
             tables = [DataStructures.DefaultDict{UInt, Vector{Int}}(Vector{Int}) for _ in 1:n_tables]
@@ -73,36 +75,38 @@
         (hash(signature[(i - 1) * mhind.rows + 1 : min(i * mhind.rows, mhind.max_n_hashes)]) for i in 1:length(mhind.tables))
     end
 
-    #TODO: Type optimize
     SimpleTraits.@traitfn function fingerprint(mh:: MinHash, shingles::::SimpleTraits.BaseTraits.IsIterator) 
-        [minimum((hash_func(s) for s in shingles)) for hash_func in mh.hash_functions]
+        [minimum((hash(s, salt) for s in shingles)) for salt in mh.salts]
     end
 
     """
         Compute MinHash fingerprint for string using the `shingle` function.
     """
-    function fingerprint(mh:: MinHash, str::AbstractString; shingle=shinglerize(3))::Vector{UInt}
-        fingerprint(mh, shingle(str))
+    function fingerprint(mh:: MinHash, str::AbstractString; shingle_size=3)::Vector{UInt}
+        fingerprint(mh, shingle(str; size=shingle_size))
     end
 
     """
-        Return a function which cuts a given string into shingles of size `size`.
+        Cut a given string into shingles of size `size`.
         ```jldoctest
         julia> shingle = shinglerize(2)
         julia> collect(shingle("abcd"))
         ["ab","bc","cd"]
         ```
     """
-    function shinglerize(size = 3)
-        function shingle(s::AbstractString)
-            n = length(s)
-            (s[thisind(s, i): thisind(s, j)] for (i,j) in 
-                zip(1 : n - size + 1, size : n))
+    function shingle(s::AbstractString; size = 3)::Vector{AbstractString}
+        if length(s) <= size
+            return [s]
         end
+        shingles = Vector{String}()
+        for i in 1:(length(s) - size + 1)
+            push!(shingles, s[thisind(s, i): thisind(s, i + size - 1)])
+        end
+        unique(shingles)
     end
 
     function estimate_jaccard(a::Vector{UInt}, b::Vector{UInt})
-        StatsBase.mean(a .== b)
+        sum(a .== b) / length(a)
     end
 
     """
