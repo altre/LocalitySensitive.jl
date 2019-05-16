@@ -16,7 +16,7 @@ mh = MinHash()
 fingerprints = fingerprint_all(mh, [shingle(d, size=4) for d in documents])
 estimate_jaccard(fingerprints[1], fingerprints[2])
 mhind = MinHashIndex(minhash=mh, threshold=0.9)
-for f in fingerprints[:]
+for f in fingerprints
     push!(mhind, f)
 end
 pairs = similar_pairs(mhind)
