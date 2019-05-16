@@ -2,7 +2,7 @@ using LocalitySensitive
 using Test
 using Random
 
-@testset "LocalitySensitive.jl" begin
+@testset "MinHash" begin
     @testset "estimate jaccard distance" begin
         mh = MinHash()
         test_fp = fingerprint(mh, shingle("test", size=3))
@@ -45,12 +45,11 @@ using Random
         @test [2] == find_similar(mhind, signature)
         
         sets = [collect(i:j) for (i,j) in zip(1:100, 3:102)]
-        mh = MinHash(200)
-        rng = MersenneTwister(1)
+        mh = MinHash(400)
         for i in 3:6
             mhind = MinHashIndex(minhash=mh, threshold=(i-2)/10)
             push!(mhind, fingerprint(mh, sets))
-            s1 = sets[randperm(rng, length(sets))][1:i*10]
+            s1 = sets[1:i*10]
             @test [1] == find_similar(mhind, fingerprint(mh, s1))
             mhind = MinHashIndex(minhash=mh, threshold=(i+3)/10)
             push!(mhind, fingerprint(mh, sets))
