@@ -4,11 +4,13 @@ authors = ["Alan Schelten <alan.schelten@mercateo.com>"]
 version = "0.1.0"
 
 [deps]
-BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SimpleTraits = "699a6c99-e7fa-54fc-8d76-47d257e15c1d"
-Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+
+[targets]
+test = ["Test", "BenchmarkTools"]
