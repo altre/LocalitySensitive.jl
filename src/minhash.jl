@@ -38,8 +38,7 @@ end
 """
     Cut a given string into shingles of size `size`.
     ```jldoctest
-    julia> shingle = shinglerize(2)
-    julia> collect(shingle("abcd"))
+    julia> shingle("abcd"; size = 2)
     ["ab","bc","cd"]
     ```
 """
