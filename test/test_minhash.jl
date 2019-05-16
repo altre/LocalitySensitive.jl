@@ -68,4 +68,16 @@ using Random
         push!(mhind, fingerprint(mh, "sim58849"))
         @test sort([(1,2),(1,3),(2,3),(4,5),(4,6),(5,6)]) == sort(similar_pairs(mhind))
     end
+
+    @testset "Fingerprint all" begin
+        mh = MinHash()
+        documents = ["als", "kjsqer", "al;kjslkj", "sld"]
+        fingerprints = fingerprint_all(mh, [shingle(d, size=3) for d in documents])
+        mhind = MinHashIndex(minhash=mh, threshold = 0.9)
+        for f in fingerprints
+            push!(mhind, f)
+        end
+        @test [1] == find_similar(mhind, fingerprint(mh, "als"))
+        @test [] == find_similar(mhind, fingerprint(mh, "al"))
+    end
 end

@@ -25,7 +25,7 @@ function fingerprint_all(mh, shingles)
     Threads.@threads for i in 1:n_docs
         all_fingerprints[:,i] = fingerprint(mh, shingles[i])
     end
-    all_fingerprints
+    [all_fingerprints[:,i] for i in 1:n_docs]
 end
 
 """
