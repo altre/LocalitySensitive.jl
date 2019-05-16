@@ -14,8 +14,18 @@ struct MinHash
     end
 end
 
-SimpleTraits.@traitfn function fingerprint(mh:: MinHash, shingles::::SimpleTraits.BaseTraits.IsIterator) 
-    [minimum((hash(s, salt) for s in shingles)) for salt in mh.salts]
+SimpleTraits.@traitfn function fingerprint(mh:: MinHash, shngls::::SimpleTraits.BaseTraits.IsIterator) 
+    [minimum((hash(s, salt) for s in shngls)) for salt in mh.salts]
+end
+
+function fingerprint_all(mh, shingles)
+    n_hashes = length(mh.salts)
+    n_docs = length(shingles)
+    all_fingerprints = Array{UInt, 2}(undef,n_hashes,n_docs) 
+    Threads.@threads for i in 1:n_docs
+        all_fingerprints[:,i] = fingerprint(mh, shingles[i])
+    end
+    all_fingerprints
 end
 
 """
@@ -33,7 +43,7 @@ end
     ["ab","bc","cd"]
     ```
 """
-function shingle(s::AbstractString; size = 3)::Vector{AbstractString}
+function shingle(s::AbstractString; size = 3)::Vector{String}
     if length(s) <= size
         return [s]
     end
