@@ -45,7 +45,7 @@ using Random
         @test [2] == find_similar(mhind, signature)
         
         sets = [collect(i:j) for (i,j) in zip(1:100, 3:102)]
-        mh = MinHash(400)
+        mh = MinHash(400, MersenneTwister(1))
         for i in 3:6
             mhind = MinHashIndex(minhash=mh, threshold=(i-2)/10)
             push!(mhind, fingerprint(mh, sets))

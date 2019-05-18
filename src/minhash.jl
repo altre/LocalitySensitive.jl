@@ -1,6 +1,7 @@
 import DataStructures
 import SimpleTraits
 import Base.push!
+import Random
 
 struct MinHash
     salts :: Vector{UInt}
@@ -9,8 +10,8 @@ struct MinHash
     # Arguments
     - `threshold` the jaccard similarity above which documents are probably returned to be similar.
     """
-    function MinHash(max_n_hashes=200)
-        new([rand(UInt) for _ in 1:max_n_hashes])
+    function MinHash(max_n_hashes=200, rng=Random.MersenneTwister())
+        new([rand(rng, UInt) for _ in 1:max_n_hashes])
     end
 end
 
