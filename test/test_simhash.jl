@@ -3,9 +3,10 @@ using Test
 using SparseArrays
 
 @testset "SimHash" begin
-    @testset "Estimate cosine distance" begin
+    @testset "Estimate cosine similarity" begin
         sh = SimHash(1)
-        f = fingerprint(sh, [("ab", 1), ("bc",1)])
+        features_weights =  [("ab", 1), ("bc",1)]
+        f = fingerprint(sh, features_weights)
         @test 1 == estimate_cosine(f, f)
         f2 = fingerprint(sh, [("fg", 1), ("de",1)])
         @test estimate_cosine(f, f2) < 0.2

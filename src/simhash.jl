@@ -1,7 +1,7 @@
-import Distances
 import SparseArrays
 import BKTrees
 import Base.push!
+import SparseArrays
 
 struct SimHash
     salt::UInt
@@ -9,23 +9,43 @@ struct SimHash
 end
 
 function fingerprint(sh::SimHash, features_weights)
-    fp = zeros(64)
+    fingerprints = zeros(64)
     for (feature, weight) in features_weights
-        b = BitVector(undef, 64)
-        b.chunks = [hash(feature, sh.salt)]
-        for (i,bit) in enumerate(b)
-            if bit
-                fp[i] += weight
+        hash_ = hash(feature, sh.salt)
+        @inbounds @simd for i in 1:64
+            if (hash_ & _bitmask(i)) != 0
+                fingerprints[i] += weight
             else
-                fp[i] -= weight
+                fingerprints[i] -= weight
             end
         end
     end
-    BitVector(fp .> 0)
+    signature = UInt(0)
+    for (i, finger) in enumerate(fingerprints)
+        if finger > 0
+            signature |= _bitmask(i)
+        end
+    end
+    signature
 end
 
+function _bitmask(i)
+    UInt(1) << (i - 1)
+end
+
+function fingerprint_all(sh::SimHash, data::SparseArrays.SparseMatrixCSC)
+    n = size(data, 2)
+    fingerprints = Vector{UInt64}(undef, n)
+    Threads.@threads for i in 1:n
+        col = data[:,i]
+        fingerprints[i] = fingerprint(sh, col)
+    end
+    fingerprints
+end
+
+
 function fingerprint(sh::SimHash, features_weights::SparseArrays.SparseVector)
-    fingerprint(sh, zip(SparseArrays.nonzeroinds(features_weights), SparseArrays.nonzeros(features_weights)))
+    fingerprint(sh, zip(features_weights.nzind, features_weights.nzval))
 end
 
 """
@@ -36,17 +56,17 @@ function estimate_cosine(a, b)
 end
 
 #TODO: Benchmark xor popcnt instead of distances packages
-function hamming(a, b)
-    Distances.hamming(a, b)
+@inline function hamming(a, b)
+    count_ones(xor(a,b))
 end
 
-_d(a,b) = Distances.hamming(a[2], b[2])
+bk_distfunc(a,b) = hamming(a[2], b[2])
 
 mutable struct SimHashIndex
     tree::BKTrees.BKTree
     current_index::Int
     distance_bits::Int
-    SimHashIndex(cosine_similarity_threshold) = new(BKTrees.BKTree{Tuple{Int, BitVector}}(_d), 
+    SimHashIndex(cosine_similarity_threshold) = new(BKTrees.BKTree{Tuple{Int, UInt}}(bk_distfunc), 
             1, _cosine_to_hamming(cosine_similarity_threshold))
 end
 
