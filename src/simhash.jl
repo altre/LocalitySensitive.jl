@@ -8,27 +8,27 @@ include("index_util.jl")
 struct SimHash
     salt::UInt
     n_hashes :: Int
-    SimHash(seed = rand(UInt), n_hashes=64) = new(seed, n_hashes)
+    HashVectorType :: DataType
+    SimHash(seed = rand(UInt)) = new(seed, 64, BitVector)
 end
 
 function fingerprint(sh::SimHash, features_weights)
-    fingerprints = zeros(sh.n_hashes)
+    fingerprints = zeros(64)
     for (feature, weight) in features_weights
-        hash_ = BitVector()
-        hash_.chunks = [hash(feature, sh.salt) for _ in 1:ceil(sh.n_hashes / 64)]
-        hash_.dims = (sh.n_hashes,)
-        hash_.len = sh.n_hashes
-        @inbounds @simd for i in hash_
-            if i != 0
+        hash_ = hash(feature, sh.salt)
+        @inbounds @simd for i in 1:64
+            if (hash_ & _bitmask(i)) != 0
                 fingerprints[i] += weight
             else
                 fingerprints[i] -= weight
             end
         end
     end
-    signature = BitVector(undef, sh.n_hashes)
+    signature = UInt(0)
     for (i, finger) in enumerate(fingerprints)
-        signature[i] = finger > 0
+        if finger > 0
+            signature |= _bitmask(i)
+        end
     end
     signature
 end
@@ -39,7 +39,7 @@ end
 
 function fingerprint_all(sh::SimHash, data::SparseArrays.SparseMatrixCSC)
     n = size(data, 2)
-    fingerprints = Vector{BitVector}(undef, n)
+    fingerprints = Vector{UInt64}(undef, n)
     Threads.@threads for i in 1:n
         col = data[:,i]
         fingerprints[i] = fingerprint(sh, col)
