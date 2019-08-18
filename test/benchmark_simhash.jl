@@ -23,19 +23,26 @@ tfidf = SparseMatrixCSC(tf_idf(document_matrix)')
 
 @benchmark fingerprint_all(sh, tfidf)
 
-fp = fingerprint_all(sh, tfidf)
+fps = fingerprint_all(sh, tfidf)
 
 
 @info "Push to index"
 function pushall(fingerp)
-    sh = SimHashIndex(0.8)
+    sh = SimHashIndex(0.85)
     for f in fingerp
         push!(sh, f)
     end
     sh
 end
 
-@benchmark pushall(fp)
+# @benchmark pushall(fp)
+shind = pushall(fps)
+estimate_cosine(fps[24], fps[25])
+find_similar(shind, fps[24])
+benchmark_documents[find_similar(shind, fps[24])]
+benchmark_documents[find_similar(shind, fps[1])]
+benchmark_documents[1]
+
 
 function simall(fingerp, sh::SimHashIndex)
     for f in fingerp

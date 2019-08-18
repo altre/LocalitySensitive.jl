@@ -4,17 +4,15 @@ authors = ["Alan Schelten <alan.schelten@mercateo.com>"]
 version = "0.1.0"
 
 [deps]
-BKTrees = "ee198288-c0a6-11e8-2b13-b1a3efb02dae"
 DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
-ProfileView = "c46f51b8-102a-5cf2-8d2c-8597cb0e0da7"
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-SimpleTraits = "699a6c99-e7fa-54fc-8d76-47d257e15c1d"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 TextAnalysis = "a2db99b7-8b79-58f8-94bf-bbc811eef33d"
 
 [extras]
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+TextAnalysis = "a2db99b7-8b79-58f8-94bf-bbc811eef33d"
 
 [targets]
-test = ["Test", "BenchmarkTools"]
+test = ["Test", "BenchmarkTools", "TextAnalysis"]

@@ -35,7 +35,7 @@ using Random
 
     @testset "push document to index" begin
         mh = MinHash()
-        mhind = MinHashIndex(minhash=mh, threshold=0.1)
+        mhind = MinHashIndex(fingerprinter=mh, threshold=0.1)
         signature = fingerprint(mh, "test")
         push!(mhind, signature)
         signature = fingerprint(mh, "testsim")
@@ -47,11 +47,11 @@ using Random
         sets = [collect(i:j) for (i,j) in zip(1:100, 3:102)]
         mh = MinHash(400, MersenneTwister(1))
         for i in 3:6
-            mhind = MinHashIndex(minhash=mh, threshold=(i-2)/10)
+            mhind = MinHashIndex(fingerprinter=mh, threshold=(i-2)/10)
             push!(mhind, fingerprint(mh, sets))
             s1 = sets[1:i*10]
             @test [1] == find_similar(mhind, fingerprint(mh, s1))
-            mhind = MinHashIndex(minhash=mh, threshold=(i+3)/10)
+            mhind = MinHashIndex(fingerprinter=mh, threshold=(i+3)/10)
             push!(mhind, fingerprint(mh, sets))
             @test [] == find_similar(mhind, fingerprint(mh, s1))
         end
@@ -59,7 +59,7 @@ using Random
     
     @testset "Find all pair indices" begin
         mh = MinHash()
-        mhind = MinHashIndex(minhash= mh, threshold=0)
+        mhind = MinHashIndex(fingerprinter= mh, threshold=0)
         push!(mhind, fingerprint(mh, "test"))
         push!(mhind, fingerprint(mh, "testSIM"))
         push!(mhind, fingerprint(mh, "SIMtest"))
@@ -73,7 +73,7 @@ using Random
         mh = MinHash()
         documents = ["als", "kjsqer", "al;kjslkj", "sld"]
         fingerprints = fingerprint_all(mh, [shingle(d, size=3) for d in documents])
-        mhind = MinHashIndex(minhash=mh, threshold = 0.9)
+        mhind = MinHashIndex(fingerprinter=mh, threshold = 0.9)
         for f in fingerprints
             push!(mhind, f)
         end

@@ -1,6 +1,7 @@
 using LocalitySensitive
 using Test
 using SparseArrays
+using TextAnalysis
 
 @testset "SimHash" begin
     @testset "Estimate cosine similarity" begin
@@ -34,11 +35,20 @@ using SparseArrays
         sh = SimHash(1)
         shind = SimHashIndex(0.3)
         @test [] == similar_pairs(shind)
-        docs = ["test","testSIM","SIMtest","58849","58849sim","sim58849"]
-        docs = [[(s, 1) for s in shingle(d)] for d in docs]
-        for doc in docs
-            push!(shind, fingerprint(sh, doc))
+        docs = [
+            "this is an english sentence", 
+            "this is an english sentence this is an english sentence", 
+            "this too, is an english sentence", 
+            "no resemblance whatsoever"
+        ]
+        docs = Document.(docs)
+        crps = Corpus(docs)
+        update_lexicon!(crps)
+        m = DocumentTermMatrix(crps)
+        features = tf_idf(m)
+        for i in 1:length(docs)
+            push!(shind, fingerprint(sh, features[i,:]))
         end
-        @test sort([(1,2),(1,3),(2,3),(4,5),(4,6),(5,6)]) == sort(similar_pairs(shind))
+        @test [(1, 2), (1, 3), (2, 3)] == sort(similar_pairs(shind))
     end
 end
